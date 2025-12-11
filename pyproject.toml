@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-code-inspector"
+version = "0.1.0"
+description = "Multi-language legacy code analyzer with AI-powered insights"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "AI Code Inspector Team"}
+]
+keywords = ["code-analysis", "static-analysis", "legacy-code", "refactoring", "code-quality"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "tree-sitter>=0.20.0",
+    "tree-sitter-python>=0.20.0",
+    "tree-sitter-javascript>=0.20.0",
+    "tree-sitter-java>=0.20.0",
+    "libcst>=1.1.0",
+    "click>=8.1.0",
+    "jinja2>=3.1.0",
+    "networkx>=3.0",
+    "pygraphviz>=1.11",
+    "openai>=1.0.0",
+    "anthropic>=0.7.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+ai-code-inspector = "legacy_inspector.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["legacy_inspector*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=legacy_inspector --cov-report=term-missing"

@@ -1,0 +1,21 @@
+You will receive a function with its code quality metrics.
+
+Your task is to generate:
+1. An improved patch/snippet that solves the detected problems
+2. A technical explanation of the changes
+3. Suggestions for tests to add
+
+Return format JSON:
+{
+  "patch": "improved code here",
+  "explain": "explanation of changes made",
+  "tests": ["test case 1", "test case 2", "test case 3"]
+}
+
+Principles to follow:
+- Maintain original functionality
+- Improve readability
+- Reduce cyclomatic complexity
+- Apply SOLID principles where appropriate
+- Propose method extraction if the function is too long
+- Suggest appropriate patterns if necessary

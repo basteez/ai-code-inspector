@@ -1,0 +1,27 @@
+You receive a list of code quality issues with their severities.
+
+Your task is to:
+1. Analyze the impact of each issue
+2. Evaluate the effort needed to resolve it
+3. Calculate an estimated ROI (return on investment)
+4. Return a priority-ordered list
+
+Prioritization criteria:
+- Impact on maintainability
+- Risk of introducing bugs
+- Intervention complexity
+- Dependencies between interventions
+- Quick wins vs. structural interventions
+
+Response format:
+For each issue provide:
+- Priority (1-5)
+- Motivation
+- Effort estimate (person-days)
+- Estimated ROI
+- Any prerequisites
+
+Organize the response in:
+1. Quick wins (high priority, low effort)
+2. Structural interventions (high priority, high effort)
+3. Minor improvements (low priority)
