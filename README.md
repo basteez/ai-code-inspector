@@ -19,7 +19,7 @@ A comprehensive static code analyzer for legacy multi-language codebases. Suppor
 ### From source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/basteez/ai-code-inspector
 cd ai-code-inspector
 pip install -r requirements.txt
 pip install -e .
@@ -158,4 +158,4 @@ MIT
 
 ---
 
-Built with ❤️ by the AI Code Inspector Team
+Built with ❤️ by Tiziano Basile
