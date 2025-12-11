@@ -17,6 +17,7 @@ class AIHelper:
         self.model = self.config.get("model", "gpt-4")
         self.max_tokens = self.config.get("max_tokens", 2000)
         self.temperature = self.config.get("temperature", 0.3)
+        self.base_url = self.config.get("base_url", "")
 
         # Client will be initialized on first use
         self._client = None
@@ -26,20 +27,38 @@ class AIHelper:
         if self._client is not None:
             return self._client
 
-        if not self.api_key:
-            raise ValueError(
-                "LLM_API_KEY environment variable is not set. "
-                "AI features require an API key."
-            )
-
-        if self.provider == "openai":
+        # For LM Studio and other OpenAI-compatible endpoints, API key can be optional
+        if self.provider == "openai" or self.provider == "lmstudio":
             try:
                 from openai import OpenAI
 
-                self._client = OpenAI(api_key=self.api_key)
+                # LM Studio uses OpenAI-compatible API
+                client_args = {}
+                
+                if self.base_url:
+                    # Custom endpoint (LM Studio, LocalAI, etc.)
+                    client_args["base_url"] = self.base_url
+                    # For local models, API key might not be required
+                    client_args["api_key"] = self.api_key if self.api_key else "lm-studio"
+                else:
+                    # Standard OpenAI
+                    if not self.api_key:
+                        raise ValueError(
+                            "LLM_API_KEY environment variable is not set. "
+                            "AI features require an API key for OpenAI."
+                        )
+                    client_args["api_key"] = self.api_key
+                
+                self._client = OpenAI(**client_args)
             except ImportError:
                 raise ImportError("openai package is required. Install with: pip install openai")
+                
         elif self.provider == "anthropic":
+            if not self.api_key:
+                raise ValueError(
+                    "LLM_API_KEY environment variable is not set. "
+                    "AI features require an API key for Anthropic."
+                )
             try:
                 from anthropic import Anthropic
 
@@ -49,7 +68,7 @@ class AIHelper:
                     "anthropic package is required. Install with: pip install anthropic"
                 )
         else:
-            raise ValueError(f"Unsupported provider: {self.provider}")
+            raise ValueError(f"Unsupported provider: {self.provider}. Use 'openai', 'lmstudio', or 'anthropic'")
 
         return self._client
 
@@ -76,7 +95,7 @@ class AIHelper:
         client = self._get_client()
 
         try:
-            if self.provider == "openai":
+            if self.provider in ["openai", "lmstudio"]:
                 response = client.chat.completions.create(
                     model=self.model,
                     messages=[
@@ -321,7 +340,9 @@ Focus on the most impactful improvements.
 
     def _prioritize_issues(self, smells: List[Dict], summary: Dict[str, Any]) -> List[Dict[str, str]]:
         """Prioritize issues by severity and type."""
-        system_prompt = "You are a senior software engineer. Prioritize code quality issues by impact and effort."
+        system_prompt = self._load_prompt("prioritize")
+        if not system_prompt:
+            system_prompt = "You are a senior software engineer. Prioritize code quality issues by impact and effort."
         
         # Group by type and severity
         issue_groups = {}
@@ -376,8 +397,13 @@ Format as a concise list.
         """Generate specific fix recommendations for each smell."""
         recommendations = []
         
+        # Load the refactor prompt once for all smells
+        refactor_prompt = self._load_prompt("refactor_patch")
+        if not refactor_prompt:
+            refactor_prompt = "You are an expert code reviewer. Provide a specific, actionable fix recommendation."
+        
         for smell in smells:
-            system_prompt = "You are an expert code reviewer. Provide a specific, actionable fix recommendation."
+            system_prompt = refactor_prompt
             
             user_prompt = f"""
 Issue: {smell.get('type', 'unknown')}

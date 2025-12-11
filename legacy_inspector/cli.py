@@ -159,8 +159,9 @@ def analyze(
                     for pf in problematic_files:
                         file_path = pf['file']
                         # Find the file metrics and smells for this file
-                        fm = next((f for f in file_metrics if f.file == file_path), None)
-                        file_smells = [s for s in smells if s.file == file_path]
+                        # FileMetrics is an object, so use .file attribute, not dict access
+                        fm = next((f for f in file_metrics if str(f.file) == file_path), None)
+                        file_smells = [s for s in smells if str(s.file) == file_path]
                         
                         if fm:
                             try:

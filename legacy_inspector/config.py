@@ -56,6 +56,7 @@ AI_CONFIG = {
     "model": os.getenv("LLM_MODEL", "gpt-4"),
     "max_tokens": int(os.getenv("LLM_MAX_TOKENS", "2000")),
     "temperature": float(os.getenv("LLM_TEMPERATURE", "0.3")),
+    "base_url": os.getenv("LLM_BASE_URL", ""),  # For LM Studio or custom endpoints
 }
 
 # Prompts directory

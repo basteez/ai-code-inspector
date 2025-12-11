@@ -80,8 +80,65 @@ ai-code-inspector summarize report.json
 
 Set environment variables:
 
-- `LLM_API_KEY`: Your AI provider API key (optional)
-- `LLM_PROVIDER`: `openai` or `anthropic` (default: `openai`)
+- `LLM_API_KEY`: Your AI provider API key (optional for local models)
+- `LLM_PROVIDER`: `openai`, `lmstudio`, or `anthropic` (default: `openai`)
+- `LLM_BASE_URL`: Base URL for custom endpoints (for LM Studio or other OpenAI-compatible APIs)
+- `LLM_MODEL`: Model name (default: `gpt-4`)
+- `LLM_MAX_TOKENS`: Maximum tokens in response (default: `2000`)
+- `LLM_TEMPERATURE`: Temperature for generation (default: `0.3`)
+
+### Using LM Studio (Local LLM)
+
+LM Studio provides a local OpenAI-compatible API server. To use it:
+
+1. **Start LM Studio** and load your preferred model
+2. **Enable the local server** (default: `http://localhost:1234/v1`)
+3. **Configure environment variables:**
+
+```bash
+export LLM_PROVIDER="lmstudio"
+export LLM_BASE_URL="http://localhost:1234/v1"
+export LLM_MODEL="your-model-name"  # e.g., "mistral-7b-instruct"
+# API key not required for LM Studio
+export LLM_API_KEY="not-needed"
+
+ai-code-inspector analyze path/to/code --ai --output-html report.html
+```
+
+**Benefits of using LM Studio:**
+
+- ✅ Free and runs locally
+- ✅ No API costs
+- ✅ Privacy - your code stays on your machine
+- ✅ Works offline
+- ✅ Supports many open-source models (Mistral, Llama, CodeLlama, etc.)
+
+**Recommended models for code analysis:**
+
+- `codellama-13b-instruct` - Best for code understanding
+- `mistral-7b-instruct` - Good balance of speed and quality
+- `deepseek-coder-33b` - Excellent for code-specific tasks
+- `llama-2-13b-chat` - General purpose
+
+### Using OpenAI
+
+```bash
+export LLM_API_KEY="sk-..."
+export LLM_PROVIDER="openai"
+export LLM_MODEL="gpt-4"  # or gpt-3.5-turbo
+
+ai-code-inspector analyze path/to/code --ai --output-html report.html
+```
+
+### Using Anthropic (Claude)
+
+```bash
+export LLM_API_KEY="sk-ant-..."
+export LLM_PROVIDER="anthropic"
+export LLM_MODEL="claude-3-opus-20240229"
+
+ai-code-inspector analyze path/to/code --ai --output-html report.html
+```
 
 ### AI-Powered Detailed Analysis
 
