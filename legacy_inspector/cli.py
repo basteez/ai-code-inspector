@@ -30,15 +30,22 @@ def main():
 @click.option("--output-json", type=click.Path(), help="Output JSON report path")
 @click.option("--output-html", type=click.Path(), help="Output HTML report path")
 @click.option("--ai", is_flag=True, help="Enable AI-powered insights")
+@click.option("--clean-code", is_flag=True, help="Enable comprehensive Clean Code review (requires --ai)")
 @click.option("--export-graph", type=click.Path(), help="Export dependency graph (DOT format)")
 def analyze(
     path: str,
     output_json: Optional[str],
     output_html: Optional[str],
     ai: bool,
+    clean_code: bool,
     export_graph: Optional[str],
 ):
     """Analyze a codebase and generate reports."""
+    
+    if clean_code and not ai:
+        console.print("[yellow]⚠️  --clean-code requires --ai flag. Enabling AI...[/yellow]\n")
+        ai = True
+    
     console.print(f"\n[bold blue]🔍 Analyzing: {path}[/bold blue]\n")
 
     # Step 1: Scan directory
@@ -104,13 +111,15 @@ def analyze(
 
     # Step 5: AI insights (optional)
     ai_insights = None
+    clean_code_reviews = []
+    
     if ai:
-        console.print("[cyan]🤖 Generating AI insights...[/cyan]")
+        console.print("[cyan]🤖 Generating detailed AI insights...[/cyan]")
         ai_helper = create_ai_helper()
 
         if ai_helper:
             try:
-                # Generate summary
+                # Generate comprehensive analysis
                 report_data = {
                     "summary": {
                         **scan_result.get_summary(),
@@ -118,17 +127,79 @@ def analyze(
                     },
                     "smells": [s.to_dict() for s in smells],
                 }
+                
+                file_metrics_dicts = [fm.to_dict() for fm in file_metrics]
+                ai_insights = ai_helper.generate_detailed_analysis(report_data, file_metrics_dicts)
 
-                summary = ai_helper.generate_summary(report_data)
-                console.print(f"[green]✓ AI Summary:[/green]\n{summary}\n")
-
-                ai_insights = {
-                    "summary": summary,
-                    "html": f"<p>{summary}</p>",
-                }
+                # Display summary
+                console.print(f"[green]✓ AI Summary:[/green]\n{ai_insights['summary']}\n")
+                
+                # Display top recommendations
+                if ai_insights.get('recommendations'):
+                    console.print("[cyan]📝 Top AI Recommendations:[/cyan]")
+                    for i, rec in enumerate(ai_insights['recommendations'][:5], 1):
+                        console.print(f"\n[yellow]{i}. {rec['type']}[/yellow] ([red]{rec['severity']}[/red]) - {rec['file']}")
+                        if rec['function'] != 'N/A':
+                            console.print(f"   Function: [cyan]{rec['function']}[/cyan]")
+                        console.print(f"   {rec['recommendation'][:200]}..." if len(rec['recommendation']) > 200 else f"   {rec['recommendation']}")
+                
+                # Display problematic files
+                if ai_insights.get('problematic_files'):
+                    console.print("\n[cyan]⚠️  Most Problematic Files:[/cyan]")
+                    for f in ai_insights['problematic_files'][:3]:
+                        console.print(f"   • {f['file']}: [red]{f['smell_count']}[/red] issues ({f['loc']} LOC)")
+                
+                # Clean Code Review (if requested)
+                if clean_code:
+                    console.print("\n[cyan]🧹 Performing Clean Code Review on most problematic files...[/cyan]")
+                    
+                    # Review top 3 most problematic files
+                    problematic_files = ai_insights.get('problematic_files', [])[:3]
+                    
+                    for pf in problematic_files:
+                        file_path = pf['file']
+                        # Find the file metrics and smells for this file
+                        fm = next((f for f in file_metrics if f.file == file_path), None)
+                        file_smells = [s for s in smells if s.file == file_path]
+                        
+                        if fm:
+                            try:
+                                # Read the file content
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    code_content = f.read()
+                                
+                                # Prepare metrics
+                                review_metrics = {
+                                    'loc': fm.loc,
+                                    'functions_count': len(fm.functions),
+                                    'avg_complexity': sum(fn.complexity for fn in fm.functions) / len(fm.functions) if fm.functions else 0,
+                                    'max_nesting': max((fn.nesting_depth for fn in fm.functions), default=0),
+                                }
+                                
+                                console.print(f"\n   Reviewing: [cyan]{file_path}[/cyan]...")
+                                review = ai_helper.clean_code_review(
+                                    code_content,
+                                    file_path,
+                                    [s.to_dict() for s in file_smells],
+                                    review_metrics
+                                )
+                                clean_code_reviews.append(review)
+                                console.print(f"   [green]✓ Clean Code Review completed[/green]")
+                                
+                            except Exception as e:
+                                console.print(f"   [yellow]⚠️  Could not review {file_path}: {e}[/yellow]")
+                    
+                    if clean_code_reviews:
+                        console.print(f"\n[green]✓ Generated {len(clean_code_reviews)} Clean Code reviews[/green]")
+                        if ai_insights:
+                            ai_insights['clean_code_reviews'] = clean_code_reviews
+                
+                console.print("")
 
             except Exception as e:
                 console.print(f"[red]Error generating AI insights: {e}[/red]\n")
+                import traceback
+                traceback.print_exc()
         else:
             console.print("[yellow]AI helper not available (check LLM_API_KEY)[/yellow]\n")
 

@@ -20,21 +20,28 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <title>AI Code Inspector Report</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
         }
-        h1, h2, h3 { color: #333; }
+        h1, h2, h3 { 
+            color: #333;
+            word-wrap: break-word;
+        }
         .container {
             background: white;
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            overflow-x: auto;
         }
         .summary {
             display: grid;
@@ -57,19 +64,27 @@ HTML_TEMPLATE = """
             color: #666;
             font-size: 0.9em;
         }
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 20px 0;
+        }
         table {
             width: 100%;
+            min-width: 600px;
             border-collapse: collapse;
-            margin: 20px 0;
         }
         th, td {
             text-align: left;
             padding: 12px;
             border-bottom: 1px solid #ddd;
+            word-wrap: break-word;
+            max-width: 300px;
         }
         th {
             background: #f8f9fa;
             font-weight: 600;
+            position: sticky;
+            top: 0;
         }
         tr:hover {
             background: #f8f9fa;
@@ -82,6 +97,25 @@ HTML_TEMPLATE = """
             padding: 2px 6px;
             border-radius: 3px;
             font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            word-break: break-all;
+            display: inline-block;
+            max-width: 100%;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        code {
+            font-family: 'Courier New', monospace;
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
             font-size: 0.9em;
         }
         .ai-section {
@@ -89,6 +123,72 @@ HTML_TEMPLATE = """
             padding: 20px;
             border-radius: 4px;
             border-left: 4px solid #2196F3;
+        }
+        .ai-section p {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .ai-section code {
+            white-space: pre-wrap;
+        }
+        .ai-recommendation {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 3px solid #2196F3;
+            border-radius: 4px;
+            overflow-wrap: break-word;
+        }
+        
+        /* Collapsible sections */
+        .collapsible {
+            cursor: pointer;
+            padding: 10px 0;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: inherit;
+            background: none;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .collapsible:hover h2,
+        .collapsible:hover h3 {
+            color: #007bff;
+        }
+        .collapsible-icon {
+            transition: transform 0.3s ease;
+            font-size: 1.2em;
+            color: #007bff;
+        }
+        .collapsible.active .collapsible-icon {
+            transform: rotate(90deg);
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .collapsible-content.show {
+            max-height: none;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 15px;
+            }
+            table {
+                font-size: 0.85em;
+            }
+            th, td {
+                padding: 8px;
+                max-width: 200px;
+            }
         }
     </style>
 </head>
@@ -129,48 +229,59 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="container">
-        <h2>🐛 Code Smells</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Severity</th>
-                    <th>Type</th>
-                    <th>File</th>
-                    <th>Line</th>
-                    <th>Function</th>
-                    <th>Message</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for smell in smells %}
-                <tr>
-                    <td class="severity-{{ smell.severity }}">{{ smell.severity|upper }}</td>
-                    <td>{{ smell.type }}</td>
-                    <td><span class="code">{{ smell.file }}</span></td>
-                    <td>{{ smell.line }}</td>
-                    <td>{{ smell.function or '-' }}</td>
-                    <td>{{ smell.message }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+        <button class="collapsible active" onclick="toggleSection(this)">
+            <span class="collapsible-icon">▶</span>
+            <h2 style="margin: 0;">🐛 Code Smells</h2>
+        </button>
+        <div class="collapsible-content show">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>Type</th>
+                            <th>File</th>
+                            <th>Line</th>
+                            <th>Function</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for smell in smells %}
+                        <tr>
+                            <td class="severity-{{ smell.severity }}">{{ smell.severity|upper }}</td>
+                            <td>{{ smell.type }}</td>
+                            <td><span class="code">{{ smell.file }}</span></td>
+                            <td>{{ smell.line }}</td>
+                            <td>{{ smell.function or '-' }}</td>
+                            <td>{{ smell.message }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <div class="container">
-        <h2>📁 Files Overview</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>File</th>
-                    <th>Language</th>
-                    <th>LOC</th>
-                    <th>Functions</th>
-                    <th>Imports</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for file in files %}
-                <tr>
+        <button class="collapsible active" onclick="toggleSection(this)">
+            <span class="collapsible-icon">▶</span>
+            <h2 style="margin: 0;">📁 Files Overview</h2>
+        </button>
+        <div class="collapsible-content show">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Language</th>
+                            <th>LOC</th>
+                        <th>Functions</th>
+                        <th>Imports</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for file in files %}
                     <td><span class="code">{{ file.file }}</span></td>
                     <td>{{ file.language }}</td>
                     <td>{{ file.loc }}</td>
@@ -178,31 +289,60 @@ HTML_TEMPLATE = """
                     <td>{{ file.imports_count }}</td>
                 </tr>
             {% endfor %}
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
+        </div>
     </div>
 
     {% if dependency_graph %}
     <div class="container">
-        <h2>🕸️ Dependency Graph</h2>
-        <p><strong>Total Modules:</strong> {{ dependency_graph.total_modules }}</p>
-        <p><strong>Total Dependencies:</strong> {{ dependency_graph.total_dependencies }}</p>
-        
-        {% if dependency_graph.circular_dependencies %}
-        <h3>⚠️ Circular Dependencies</h3>
-        <ul>
+        <button class="collapsible active" onclick="toggleSection(this)">
+            <span class="collapsible-icon">▶</span>
+            <h2 style="margin: 0;">🕸️ Dependency Graph</h2>
+        </button>
+        <div class="collapsible-content show">
+            <p><strong>Total Modules:</strong> {{ dependency_graph.total_modules }}</p>
+            <p><strong>Total Dependencies:</strong> {{ dependency_graph.total_dependencies }}</p>
+            
+            {% if dependency_graph.circular_dependencies %}
+            <h3>⚠️ Circular Dependencies</h3>
+            <ul>
         {% for cycle in dependency_graph.circular_dependencies %}
             <li>{{ cycle|join(' → ') }}</li>
         {% endfor %}
-        </ul>
-        {% endif %}
+            </ul>
+            {% endif %}
+        </div>
     </div>
     {% endif %}
 
     {% if ai_insights %}
     <div class="container ai-section">
-        <h2>🤖 AI Insights</h2>
-        {{ ai_insights|safe }}
+        <button class="collapsible active" onclick="toggleSection(this)">
+            <span class="collapsible-icon">▶</span>
+            <h2 style="margin: 0;">🤖 AI Insights</h2>
+        </button>
+        <div class="collapsible-content show">
+            {{ ai_insights|safe }}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if clean_code_reviews %}
+    <div class="container">
+        <button class="collapsible active" onclick="toggleSection(this)">
+            <span class="collapsible-icon">▶</span>
+            <h2 style="margin: 0;">🧹 Clean Code Reviews</h2>
+        </button>
+        <div class="collapsible-content show">
+            {% for review in clean_code_reviews %}
+            <div style="margin: 20px 0; padding: 20px; background: #f9f9f9; border-left: 4px solid #4CAF50; border-radius: 4px;">
+                <h3 style="margin-top: 0;">📄 {{ review.file }}</h3>
+                <div style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">{{ review.review }}</div>
+            </div>
+            {% endfor %}
+        </div>
     </div>
     {% endif %}
 
@@ -211,6 +351,23 @@ HTML_TEMPLATE = """
             Generated by <strong>AI Code Inspector</strong> v0.1.0
         </p>
     </div>
+    
+    <script>
+        function toggleSection(button) {
+            button.classList.toggle('active');
+            const content = button.nextElementSibling;
+            content.classList.toggle('show');
+        }
+        
+        // Initialize all sections as expanded
+        document.addEventListener('DOMContentLoaded', function() {
+            const collapsibles = document.querySelectorAll('.collapsible');
+            collapsibles.forEach(button => {
+                button.classList.add('active');
+                button.nextElementSibling.classList.add('show');
+            });
+        });
+    </script>
 </body>
 </html>
 """
@@ -279,6 +436,7 @@ def generate_html_report(
         smells=report_data.get("smells", []),
         dependency_graph=report_data.get("dependency_graph"),
         ai_insights=report_data.get("ai_insights", {}).get("html", ""),
+        clean_code_reviews=report_data.get("ai_insights", {}).get("clean_code_reviews", []),
     )
 
     output_path.write_text(html, encoding="utf-8")

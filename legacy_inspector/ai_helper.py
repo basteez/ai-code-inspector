@@ -209,9 +209,279 @@ Top Issues:
             "total_issues": len(issues),
         }
 
+    def clean_code_review(
+        self, code_snippet: str, file_path: str, smells: List[Dict], metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Perform comprehensive clean code review.
+
+        Args:
+            code_snippet: Source code to review
+            file_path: Path to the file
+            smells: Detected code smells
+            metrics: Code metrics
+
+        Returns:
+            Dictionary with clean code analysis and recommendations
+        """
+        system_prompt = self._load_prompt("clean_code_review")
+
+        # Format smells for context
+        smells_summary = "\n".join([
+            f"- {s.get('type', 'unknown')} ({s.get('severity', 'info')}): {s.get('message', '')} at line {s.get('line', '?')}"
+            for s in smells[:10]
+        ])
+
+        user_prompt = f"""
+File: {file_path}
+
+Code Metrics:
+- Lines of Code: {metrics.get('loc', 'N/A')}
+- Functions: {metrics.get('functions_count', 'N/A')}
+- Cyclomatic Complexity (avg): {metrics.get('avg_complexity', 'N/A')}
+- Max Nesting Depth: {metrics.get('max_nesting', 'N/A')}
+
+Detected Code Smells:
+{smells_summary if smells_summary else 'None detected by static analysis'}
+
+Code to Review:
+```
+{code_snippet[:2000]}
+```
+
+Perform a comprehensive clean code review following all the principles outlined in your instructions.
+Focus on the most impactful improvements.
+"""
+
+        response = self._call_llm(system_prompt, user_prompt)
+
+        return {
+            "file": file_path,
+            "review": response,
+            "smells_count": len(smells),
+        }
+
+    def generate_detailed_analysis(self, report_data: Dict[str, Any], file_metrics: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Generate detailed AI analysis with specific recommendations for each problem.
+
+        Args:
+            report_data: Full report data
+            file_metrics: List of file metrics with functions
+
+        Returns:
+            Dictionary with detailed analysis, priorities, and specific suggestions
+        """
+        summary = report_data.get("summary", {})
+        smells = report_data.get("smells", [])
+
+        # Analyze top problematic files
+        file_issues = self._analyze_files(file_metrics, smells)
+        
+        # Prioritize issues
+        priorities = self._prioritize_issues(smells, summary)
+        
+        # Generate specific recommendations per smell
+        recommendations = self._generate_recommendations(smells[:15])  # Top 15 issues
+        
+        # Overall summary
+        overall_summary = self._generate_summary(summary, smells, file_issues)
+
+        return {
+            "summary": overall_summary,
+            "priorities": priorities,
+            "recommendations": recommendations,
+            "problematic_files": file_issues,
+            "html": self._format_html(overall_summary, priorities, recommendations, file_issues),
+        }
+
+    def _analyze_files(self, file_metrics: List[Dict[str, Any]], smells: List[Dict]) -> List[Dict[str, Any]]:
+        """Identify most problematic files."""
+        file_smell_counts = {}
+        for smell in smells:
+            file = smell.get('file', 'unknown')
+            file_smell_counts[file] = file_smell_counts.get(file, 0) + 1
+        
+        # Get top 5 files with most issues
+        top_files = sorted(file_smell_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        result = []
+        for file_path, smell_count in top_files:
+            # Find file metrics
+            file_metric = next((fm for fm in file_metrics if fm.get('file') == file_path), None)
+            if file_metric:
+                result.append({
+                    "file": file_path,
+                    "smell_count": smell_count,
+                    "loc": file_metric.get('loc', 0),
+                    "functions": len(file_metric.get('functions', [])),
+                })
+        
+        return result
+
+    def _prioritize_issues(self, smells: List[Dict], summary: Dict[str, Any]) -> List[Dict[str, str]]:
+        """Prioritize issues by severity and type."""
+        system_prompt = "You are a senior software engineer. Prioritize code quality issues by impact and effort."
+        
+        # Group by type and severity
+        issue_groups = {}
+        for smell in smells:
+            key = f"{smell.get('type', 'unknown')}|{smell.get('severity', 'info')}"
+            if key not in issue_groups:
+                issue_groups[key] = {
+                    "type": smell.get('type', 'unknown'),
+                    "severity": smell.get('severity', 'info'),
+                    "count": 0,
+                    "examples": [],
+                }
+            issue_groups[key]["count"] += 1
+            if len(issue_groups[key]["examples"]) < 2:
+                issue_groups[key]["examples"].append({
+                    "file": smell.get('file', ''),
+                    "function": smell.get('function', 'N/A'),
+                    "message": smell.get('message', ''),
+                })
+        
+        # Format for LLM
+        issue_summary = "\n".join([
+            f"- {v['type']} ({v['severity']}): {v['count']} occurrences\n  Example: {v['examples'][0]['file']} - {v['examples'][0]['message']}"
+            for v in sorted(issue_groups.values(), key=lambda x: (x['severity'] != 'severe', -x['count']))[:10]
+        ])
+        
+        user_prompt = f"""
+Codebase size: {summary.get('total_files', 0)} files, {summary.get('total_loc', 0)} LOC
+
+Detected Issues:
+{issue_summary}
+
+For each issue type, provide:
+1. Priority (High/Medium/Low)
+2. Impact on code quality
+3. Estimated effort to fix
+4. Recommended action
+
+Format as a concise list.
+"""
+        
+        response = self._call_llm(system_prompt, user_prompt)
+        
+        return [{
+            "type": g["type"],
+            "severity": g["severity"],
+            "count": g["count"],
+            "priority_guidance": response,
+        } for g in sorted(issue_groups.values(), key=lambda x: (x['severity'] != 'severe', -x['count']))[:5]]
+
+    def _generate_recommendations(self, smells: List[Dict]) -> List[Dict[str, str]]:
+        """Generate specific fix recommendations for each smell."""
+        recommendations = []
+        
+        for smell in smells:
+            system_prompt = "You are an expert code reviewer. Provide a specific, actionable fix recommendation."
+            
+            user_prompt = f"""
+Issue: {smell.get('type', 'unknown')}
+Severity: {smell.get('severity', 'info')}
+File: {smell.get('file', 'unknown')}
+Function: {smell.get('function', 'N/A')}
+Line: {smell.get('line', 'N/A')}
+Message: {smell.get('message', '')}
+
+Provide:
+1. Root cause (1 sentence)
+2. Specific fix (2-3 sentences with code technique)
+3. Expected benefit
+
+Be concise and technical.
+"""
+            
+            try:
+                response = self._call_llm(system_prompt, user_prompt)
+                recommendations.append({
+                    "file": smell.get('file', ''),
+                    "function": smell.get('function', 'N/A'),
+                    "type": smell.get('type', ''),
+                    "severity": smell.get('severity', ''),
+                    "recommendation": response,
+                })
+            except Exception as e:
+                print(f"Warning: Could not generate recommendation for smell: {e}")
+        
+        return recommendations
+
+    def _generate_summary(self, summary: Dict[str, Any], smells: List[Dict], file_issues: List[Dict]) -> str:
+        """Generate overall summary."""
+        system_prompt = "You are a code quality expert. Provide a concise executive summary."
+
+        user_prompt = f"""
+Analyzed codebase:
+- {summary.get('total_files', 0)} files
+- {summary.get('total_loc', 0)} lines of code
+- {summary.get('total_functions', 0)} functions
+- {len(smells)} code quality issues
+
+Top problematic files:
+{chr(10).join([f"- {f['file']}: {f['smell_count']} issues, {f['loc']} LOC" for f in file_issues[:3]])}
+
+Most common issue types:
+{', '.join(list(set([s.get('type', '') for s in smells[:10]]))[:5])}
+
+Provide a 3-4 sentence executive summary with:
+1. Overall code quality assessment
+2. Main concerns
+3. Recommended next steps
+"""
+
+        return self._call_llm(system_prompt, user_prompt)
+
+    def _format_html(self, summary: str, priorities: List[Dict], recommendations: List[Dict], files: List[Dict]) -> str:
+        """Format AI insights as HTML with proper code formatting."""
+        import html
+        
+        html_parts = [f"<h3>Executive Summary</h3><p>{html.escape(summary)}</p>"]
+        
+        if files:
+            html_parts.append("<h3>Most Problematic Files</h3><ul>")
+            for f in files[:5]:
+                html_parts.append(f"<li><strong>{html.escape(f['file'])}</strong>: {f['smell_count']} issues ({f['loc']} LOC, {f['functions']} functions)</li>")
+            html_parts.append("</ul>")
+        
+        if recommendations:
+            html_parts.append("<h3>Top Recommendations</h3>")
+            for i, rec in enumerate(recommendations[:10], 1):
+                html_parts.append("<div class='ai-recommendation'>")
+                html_parts.append(f"<strong>{i}. {html.escape(rec['type'])}</strong> ({html.escape(rec['severity'])}) - <code>{html.escape(rec['file'])}</code>")
+                if rec['function'] != 'N/A':
+                    html_parts.append(f" → <code>{html.escape(rec['function'])}</code>")
+                
+                # Format the recommendation with code blocks properly
+                recommendation_text = rec['recommendation']
+                # Replace code blocks with <pre><code>
+                import re
+                # Match triple backticks code blocks
+                recommendation_text = re.sub(
+                    r'```(\w+)?\n(.*?)\n```',
+                    lambda m: f'<pre><code>{html.escape(m.group(2))}</code></pre>',
+                    recommendation_text,
+                    flags=re.DOTALL
+                )
+                # Match inline code
+                recommendation_text = re.sub(
+                    r'`([^`]+)`',
+                    lambda m: f'<code>{html.escape(m.group(1))}</code>',
+                    recommendation_text
+                )
+                # Convert newlines to <br>
+                recommendation_text = recommendation_text.replace('\n', '<br>')
+                
+                html_parts.append(f"<div style='margin-top: 8px;'>{recommendation_text}</div>")
+                html_parts.append("</div>")
+        
+        return ''.join(html_parts)
+
     def generate_summary(self, report_data: Dict[str, Any]) -> str:
         """
-        Generate a high-level summary of the analysis.
+        Generate a high-level summary of the analysis (backward compatibility).
 
         Args:
             report_data: Full report data
