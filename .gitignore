@@ -148,7 +148,6 @@ report.json
 report.html
 *.dot
 *.png
-dependency_graph.*
 
 # Node modules (for JavaScript examples)
 node_modules/
