@@ -1,7 +1,7 @@
-"""AI Code Inspector - Multi-language code analyzer."""
+"""D3-BG - Debug, Detect, Destroy Bad Code."""
 
 __version__ = "0.1.0"
-__author__ = "AI Code Inspector Team"
+__author__ = "Tiziano Basile"
 
 from legacy_inspector.scanner import scan_directory
 from legacy_inspector.metrics import calculate_metrics

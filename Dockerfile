@@ -33,5 +33,5 @@ VOLUME ["/code"]
 WORKDIR /code
 
 # Default command
-ENTRYPOINT ["ai-code-inspector"]
+ENTRYPOINT ["d3bg"]
 CMD ["--help"]

@@ -21,7 +21,7 @@ console = Console()
 @click.group()
 @click.version_option(version="0.1.0")
 def main():
-    """AI Code Inspector - Multi-language code analyzer."""
+    """D3-BG - Debug, Detect, Destroy Bad Code."""
     pass
 
 
@@ -159,9 +159,9 @@ def analyze(
                     for pf in problematic_files:
                         file_path = pf['file']
                         # Find the file metrics and smells for this file
-                        # FileMetrics is an object, so use .file attribute, not dict access
-                        fm = next((f for f in file_metrics if str(f.file) == file_path), None)
-                        file_smells = [s for s in smells if str(s.file) == file_path]
+                        # FileMetrics has .filepath attribute, CodeSmell has .file_path
+                        fm = next((f for f in file_metrics if str(f.filepath) == file_path), None)
+                        file_smells = [s for s in smells if str(s.file_path) == file_path]
                         
                         if fm:
                             try:

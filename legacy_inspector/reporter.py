@@ -1,6 +1,7 @@
 """Report generation in JSON and HTML formats."""
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -13,12 +14,78 @@ from legacy_inspector.scanner import ScanResult
 from legacy_inspector.smells import CodeSmell
 
 
+def markdown_to_html(text: str) -> str:
+    """Convert markdown text to HTML."""
+    if not text:
+        return ""
+    
+    # Escape HTML special characters first
+    html = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    
+    # Code blocks (```...```)
+    html = re.sub(
+        r'```(\w*)\n(.*?)```',
+        r'<pre><code class="language-\1">\2</code></pre>',
+        html,
+        flags=re.DOTALL
+    )
+    
+    # Inline code (`...`)
+    html = re.sub(r'`([^`]+)`', r'<code>\1</code>', html)
+    
+    # Bold (**...**)
+    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+    
+    # Italic (*...*)
+    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
+    
+    # Headers
+    html = re.sub(r'^### (.+)$', r'<h4>\1</h4>', html, flags=re.MULTILINE)
+    html = re.sub(r'^## (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+    html = re.sub(r'^# (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+    
+    # Blockquotes (> ...)
+    html = re.sub(r'^> (.+)$', r'<blockquote>\1</blockquote>', html, flags=re.MULTILINE)
+    
+    # Lists - unordered (- ...)
+    def replace_ul(match):
+        items = match.group(0)
+        items = re.sub(r'^- (.+)$', r'<li>\1</li>', items, flags=re.MULTILINE)
+        return f'<ul>{items}</ul>'
+    
+    html = re.sub(r'(?:^- .+$\n?)+', replace_ul, html, flags=re.MULTILINE)
+    
+    # Lists - ordered (1. ...)
+    def replace_ol(match):
+        items = match.group(0)
+        items = re.sub(r'^\d+\.\s+(.+)$', r'<li>\1</li>', items, flags=re.MULTILINE)
+        return f'<ol>{items}</ol>'
+    
+    html = re.sub(r'(?:^\d+\.\s+.+$\n?)+', replace_ol, html, flags=re.MULTILINE)
+    
+    # Line breaks - convert double newlines to paragraphs
+    html = re.sub(r'\n\n+', '</p><p>', html)
+    html = f'<p>{html}</p>'
+    
+    # Clean up empty paragraphs
+    html = re.sub(r'<p>\s*</p>', '', html)
+    html = re.sub(r'<p>\s*(<h[234]>)', r'\1', html)
+    html = re.sub(r'(</h[234]>)\s*</p>', r'\1', html)
+    html = re.sub(r'<p>\s*(<(?:pre|ul|ol|blockquote)>)', r'\1', html)
+    html = re.sub(r'(<\/(?:pre|ul|ol|blockquote)>)\s*</p>', r'\1', html)
+    
+    # Single line breaks to <br>
+    html = html.replace('\n', '<br>')
+    
+    return html
+
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>AI Code Inspector Report</title>
+    <title>D3-BG Report</title>
     <style>
         * {
             box-sizing: border-box;
@@ -175,6 +242,61 @@ HTML_TEMPLATE = """
             max-height: none;
         }
         
+        /* Clean code review styles */
+        .clean-code-review h2,
+        .clean-code-review h3,
+        .clean-code-review h4 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .clean-code-review h2 { font-size: 1.5em; }
+        .clean-code-review h3 { font-size: 1.3em; }
+        .clean-code-review h4 { font-size: 1.1em; }
+        .clean-code-review p {
+            margin: 10px 0;
+        }
+        .clean-code-review ul,
+        .clean-code-review ol {
+            margin: 10px 0;
+            padding-left: 30px;
+        }
+        .clean-code-review li {
+            margin: 5px 0;
+        }
+        .clean-code-review blockquote {
+            margin: 10px 0;
+            padding: 10px 15px;
+            background: #f0f0f0;
+            border-left: 4px solid #666;
+            font-style: italic;
+        }
+        .clean-code-review pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .clean-code-review pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+        .clean-code-review code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .clean-code-review strong {
+            font-weight: 600;
+        }
+        .clean-code-review em {
+            font-style: italic;
+        }
+        
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -194,7 +316,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <h1>🔍 AI Code Inspector Report</h1>
+        <h1>🔍 D3-BG Report</h1>
         <p><strong>Generated:</strong> {{ generated_at }}</p>
         <p><strong>Project:</strong> {{ project_path }}</p>
     </div>
@@ -339,7 +461,7 @@ HTML_TEMPLATE = """
             {% for review in clean_code_reviews %}
             <div style="margin: 20px 0; padding: 20px; background: #f9f9f9; border-left: 4px solid #4CAF50; border-radius: 4px;">
                 <h3 style="margin-top: 0;">📄 {{ review.file }}</h3>
-                <div style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">{{ review.review }}</div>
+                <div class="clean-code-review">{{ review.review_html | safe }}</div>
             </div>
             {% endfor %}
         </div>
@@ -348,7 +470,7 @@ HTML_TEMPLATE = """
 
     <div class="container">
         <p style="text-align: center; color: #666; font-size: 0.9em;">
-            Generated by <strong>AI Code Inspector</strong> v0.1.0
+            Generated by <strong>D3-BG</strong> v0.1.0
         </p>
     </div>
     
@@ -427,6 +549,15 @@ def generate_html_report(
         project_path: Path to analyzed project
     """
     template = Template(HTML_TEMPLATE)
+    
+    # Convert clean code reviews from markdown to HTML
+    clean_code_reviews = report_data.get("ai_insights", {}).get("clean_code_reviews", [])
+    clean_code_reviews_html = []
+    for review in clean_code_reviews:
+        clean_code_reviews_html.append({
+            "file": review["file"],
+            "review_html": markdown_to_html(review["review"])
+        })
 
     html = template.render(
         generated_at=report_data.get("generated_at", ""),
@@ -436,7 +567,7 @@ def generate_html_report(
         smells=report_data.get("smells", []),
         dependency_graph=report_data.get("dependency_graph"),
         ai_insights=report_data.get("ai_insights", {}).get("html", ""),
-        clean_code_reviews=report_data.get("ai_insights", {}).get("clean_code_reviews", []),
+        clean_code_reviews=clean_code_reviews_html,
     )
 
     output_path.write_text(html, encoding="utf-8")

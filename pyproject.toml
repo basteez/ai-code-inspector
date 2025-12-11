@@ -3,14 +3,14 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai-code-inspector"
+name = "D3-BG"
 version = "0.1.0"
 description = "Multi-language legacy code analyzer with AI-powered insights"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "AI Code Inspector Team"}
+    {name = "Tiziano Basile"}
 ]
 keywords = ["code-analysis", "static-analysis", "legacy-code", "refactoring", "code-quality"]
 classifiers = [
@@ -45,14 +45,11 @@ dev = [
 ]
 
 [project.scripts]
-ai-code-inspector = "legacy_inspector.cli:main"
+d3bg = "legacy_inspector.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["legacy_inspector*"]
-
-[tool.setuptools.package-data]
-"*" = ["../prompts/*.txt"]
 
 [tool.ruff]
 line-length = 100
