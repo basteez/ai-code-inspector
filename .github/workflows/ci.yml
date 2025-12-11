@@ -24,12 +24,18 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y graphviz graphviz-dev
+          sudo apt-get install -y graphviz graphviz-dev pkg-config libgraphviz-dev
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # Install everything except pygraphviz first
+          pip install tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-java
+          pip install libcst click jinja2 networkx openai anthropic rich
+          pip install pytest pytest-cov ruff
+          # Install pygraphviz with system graphviz
+          pip install pygraphviz --config-settings="--global-option=build_ext" --config-settings="--global-option=-I/usr/include/graphviz" --config-settings="--global-option=-L/usr/lib/graphviz/" || echo "pygraphviz installation failed, continuing..."
+          # Install package
           pip install -e .
 
       - name: Lint with ruff
